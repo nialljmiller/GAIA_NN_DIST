@@ -1,2 +1,2 @@
 # GAIA_NN_DIST
-not retarded
+all my homies hate main
