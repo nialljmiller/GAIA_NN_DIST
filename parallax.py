@@ -1,297 +1,236 @@
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
-import numpy as np
-import pandas as pd
-from sklearn.metrics import mean_squared_error
-from sklearn.preprocessing import StandardScaler
-import torch
-from torch import Tensor
-# import torch.nn as nn
-from torch.nn import Linear, Sigmoid, Module
-# from torch.nn import MSELoss
-# from torch.nn import L1Loss
-from torch.nn import HuberLoss
-# from torch.nn.init import kaiming_uniform_
-from torch.nn.init import xavier_uniform_
-# import torch.nn.functional as F
-from torch.optim import Adam
-# from torch.optim import SGD
-from torch.optim.lr_scheduler import ExponentialLR
-from torch.utils.data import random_split
-# import torch.utils.data as data
-from torch.utils.data import Dataset, DataLoader
-from tqdm import tqdm
+import os  # Operating system related functionalities
+from datetime import datetime  # Working with dates and times
+from random import choices, random  # Random sampling and number generation
 
-import os
-from datetime import datetime
-from random import choices
+import numpy as np  # Numerical operations
+import pandas as pd  # Data manipulation
+
+import torch  # Main PyTorch library
+from torch import Tensor  # Tensor class from PyTorch
+#from torch.nn import Linear, Sigmoid, Module, ReLU, HuberLoss, BatchNorm1d  # Neural network layers and loss functions
+import torch.nn as nn
+from torch.nn.init import xavier_uniform_  # Xavier uniform weight initialization
+from torch.optim import Adam  # Adam optimizer
+from torch.optim.lr_scheduler import ExponentialLR  # Learning rate scheduler
+from torch.utils.data import Dataset, DataLoader, random_split  # PyTorch data loading utilities
+import torch.nn.functional as F
+
+from sklearn.preprocessing import StandardScaler  # Data normalization
+from sklearn.metrics import mean_squared_error  # Evaluating model performance
+
+import matplotlib.pyplot as plt  # Plotting
+from matplotlib import rcParams  # Customizing plot parameters
+
+from tqdm import tqdm  # Creating progress bars
+
+
+class MLP(nn.Module):
+    def __init__(self, n_inputs: int):
+        super(MLP, self).__init__()
+        self.hidden1 = nn.Linear(n_inputs, 256)
+        self.bn1 = nn.BatchNorm1d(256)
+        self.act1 = nn.ReLU()
+        self.dropout1 = nn.Dropout(0.2)
+        
+        self.hidden2 = nn.Linear(256, 128)
+        self.bn2 = nn.BatchNorm1d(128)
+        self.act2 = nn.ReLU()
+        self.dropout2 = nn.Dropout(0.2)
+        
+        self.hidden3 = nn.Linear(128, 64)
+        self.bn3 = nn.BatchNorm1d(64)
+        self.act3 = nn.ReLU()
+        self.dropout3 = nn.Dropout(0.2)
+        
+        self.hidden4 = nn.Linear(64, 32)
+        self.bn4 = nn.BatchNorm1d(32)
+        self.act4 = nn.ReLU()
+        self.dropout4 = nn.Dropout(0.2)
+        
+        self.hidden5 = nn.Linear(32, 1)
+
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+
+    def forward(self, x: torch.Tensor):
+        x = self.hidden1(x)
+        x = self.bn1(x)
+        x = self.act1(x)
+        x = self.dropout1(x)
+        
+        x = self.hidden2(x)
+        x = self.bn2(x)
+        x = self.act2(x)
+        x = self.dropout2(x)
+        
+        x = self.hidden3(x)
+        x = self.bn3(x)
+        x = self.act3(x)
+        x = self.dropout3(x)
+        
+        x = self.hidden4(x)
+        x = self.bn4(x)
+        x = self.act4(x)
+        x = self.dropout4(x)
+        
+        x = self.hidden5(x)
+        return x
 
 
 class CSVDataset(Dataset):
-    def __init__(self, path: str, x_filter: list, y_filter: list):
-        x, y, scaler_x, scaler_y, df = grab_data(path, x_filter, y_filter)
-        scaled_x = scaler_x.transform(x)
-        scaled_y = scaler_y.transform(y)
-
-        self.x = np.array(scaled_x)
-        self.y = np.array(scaled_y)
-
-        self.x = self.x.astype('float32')
-        self.y = self.y.astype('float32')
-
-        self.x = torch.from_numpy(self.x)
-        self.y = torch.from_numpy(self.y)
-        print('TRAINING ON DATASET OF SIZE :', len(x))
+    def __init__(self, path: str, x_filter: list, x_importance: list, y_filter: list):
+        x, y, scaler_x, scaler_y, df = grab_data(path, x_filter, x_importance, y_filter)
+        self.x = torch.from_numpy(scaler_x.transform(x)).float()
+        self.y = torch.from_numpy(scaler_y.transform(y)).float()
+        print('TRAINING ON DATASET OF SIZE:', len(x))
 
     def __len__(self):
         return len(self.x)
 
-    # get a row at an index
     def __getitem__(self, idx: int):
-        return [self.x[idx], self.y[idx]]
+        return self.x[idx], self.y[idx]
 
-    # get indexes for train and test rows
     def get_splits(self, n_test: float = 0.33):
-        # determine sizes
         test_size = round(n_test * len(self.x))
         train_size = len(self.x) - test_size
-        # calculate the split
         return random_split(self, [train_size, test_size])
 
-
-# model definition
-class MLP(Module):
-    # define model elements
-
-    def __init__(self, n_inputs: int):
-        super(MLP, self).__init__()
-
-        self.hidden1 = Linear(n_inputs, 16)
-        xavier_uniform_(self.hidden1.weight)
-        self.act1 = Sigmoid()
-
-        self.hidden2a = Linear(16, 32)
-        xavier_uniform_(self.hidden2a.weight)
-        self.act2a = Sigmoid()
-
-        self.hidden2 = Linear(32, 64)
-        xavier_uniform_(self.hidden2.weight)
-        self.act2 = Sigmoid()
-
-        self.hidden3 = Linear(64, 128)
-        xavier_uniform_(self.hidden3.weight)
-        self.act3 = Sigmoid()
-
-        self.hidden4 = Linear(128, 256)
-        xavier_uniform_(self.hidden4.weight)
-        self.act4 = Sigmoid()
-
-        self.hidden5 = Linear(256, 128)
-        xavier_uniform_(self.hidden5.weight)
-        self.act5 = Sigmoid()
-
-        self.hidden6 = Linear(128, 64)
-        xavier_uniform_(self.hidden6.weight)
-        self.act6 = Sigmoid()
-
-        self.hidden7 = Linear(64, 32)
-        xavier_uniform_(self.hidden7.weight)
-        self.act7 = Sigmoid()
-
-        self.hidden8 = Linear(32, 16)
-        xavier_uniform_(self.hidden8.weight)
-        self.act8 = Sigmoid()
-
-        self.hidden9 = Linear(16, 8)
-        xavier_uniform_(self.hidden9.weight)
-        self.act9 = Sigmoid()
-
-        self.hidden10 = Linear(8, 4)
-        xavier_uniform_(self.hidden10.weight)
-        self.act10 = Sigmoid()
-
-        self.hidden11 = Linear(4, 1)
-        xavier_uniform_(self.hidden11.weight)
-
-    # forward propagate input
-    def forward(self, x: Module):
-        x = self.hidden1(x)
-        x = self.act1(x)
-
-        x = self.hidden2a(x)
-        x = self.act2a(x)
-
-        x = self.hidden2(x)
-        x = self.act2(x)
-
-        x = self.hidden3(x)
-        x = self.act3(x)
-
-        # x = self.hidden4(x)
-        # x = self.act4(x)
-
-        # x = self.hidden5(x)
-        # x = self.act5(x)
-
-        x = self.hidden6(x)
-        x = self.act6(x)
-
-        x = self.hidden7(x)
-        x = self.act7(x)
-
-        x = self.hidden8(x)
-        x = self.act8(x)
-
-        x = self.hidden9(x)
-        x = self.act9(x)
-
-        x = self.hidden10(x)
-        x = self.act10(x)
-
-        x = self.hidden11(x)
-        return x
-
-
-def unweight(x: np.ndarray):
-    weights = [['l', 1], ['b', 1], ['parallax', 2], ['parallax_error', 2], ['percent_amp', 1], ['skew', 1], ['PM_x', 1],
-               ['parallax_x', 2], ['parallax_over_error', 2], ['b_rgeo_x', 1], ['B_rgeo_xa', 1], ['rpgeo', 2],
-               ['b_rpgeo_x', 1], ['B_rpgeo_xa', 1]]
-    for weight in weights:
-        weighted = weight[0]
-        weight = weight[1]
-        x[weighted] = x[weighted] / weight
-    return x
-
-
-def weighting(x: np.ndarray):
-    weights = [['l', 2], ['b', 2], ['parallax', 1], ['parallax_error', 1], ['percent_amp', 1], ['skew', 1], ['PM_x', 1],
-               ['parallax_x', 2], ['parallax_over_error', 2], ['b_rgeo_x', 1], ['B_rgeo_xa', 1], ['rpgeo', 2],
-               ['b_rpgeo_x', 1], ['B_rpgeo_xa', 1]]
-
-    for weight in weights:
-        weighted = weight[0]
-        weight = weight[1]
-        x[weighted] = x[weighted] * weight
-    return x
-
-
-def grab_data(data_fp: str, x_filter: list, y_filter: list, filter_flag: bool = True):
+def grab_data(data_fp: str, x_filter: list, x_importance: list, y_filter: list, filter_flag: bool = True):
     snr = 2
     df = pd.read_csv(data_fp, low_memory=False)
 
+    df = df.replace(np.nan, 0)
+    df = df.replace(np.inf, 0)
+
     if filter_flag:
-        df = df.loc[(abs(df['l']) > 0) & (abs(df['b']) > 0) & (abs(df['parallax']) > 0) & (
-                abs(df['parallax_over_error']) > 1) & (abs(df['pmra']) > 0) & (
-                            abs(df['pmra_x_over_error']) > snr) & (abs(df['pmdec']) > 0) & (
-                            abs(df['pmdec_over_error']) > snr) & (abs(df['rgeo']) > 0) & (
-                            abs(df['rgeo']) < 9999999) & (abs(df['b_rgeo_x']) > 0) & (abs(df['B_rgeo_xa']) > 0) & (
-                            abs(df['rgeo_diff']) > 0) & (abs(df['rpgeo']) > 0) & (abs(df['b_rpgeo_x']) > 0) & (
-                            abs(df['B_rpgeo_xa']) > 0) & (abs(df['rpgeo_diff']) > 0) & (abs(df['Plx']) > 0) & (
-                            abs(df['Plx_over_error']) > snr) & (abs(df['PM_x']) > 0) & (abs(df['pmRA_xa']) > 0) & (
-                            abs(df['pmra_x_over_error']) > snr) & (abs(df['pmDE']) > 0) & (
-                            abs(df['pmde_x_over_error']) > snr)]  # & (abs(df['j-h'])  > 0) & (abs(df['h-k'])  > 0)]
+        df = df.loc[
+            (abs(df['parallax_corr_over_error']) > 0.2) &
+            (abs(df['parallax_over_error_vvv']) > 0.2) &
+            (abs(df['ipd_frac_multi_peak']) < 0.1)
+        ]
     else:
-        df = df.loc[(abs(df['parallax']) > 0) & (abs(df['parallax_over_error']) > 0) & (abs(df['pmra']) > 0) & (
-                abs(df['rgeo']) > 0)]
-    # df = manual_norm(df)
-    # df = weighting(df)
+        df = df
 
     x = df[x_filter].copy()
-    y = np.log10(df[y_filter].copy())
+    y = df[y_filter].copy()
+    y.replace([np.nan, np.inf, -np.inf], 0, inplace=True)
 
     scaler_x = StandardScaler()
     scaler_x.fit(x)
 
+    # Check if any NaN or infinite values exist in the scaled features
+    if np.isnan(scaler_x.mean_).any() or np.isnan(scaler_x.scale_).any():
+        scaler_x.mean_ = np.nan_to_num(scaler_x.mean_)
+        scaler_x.scale_ = np.nan_to_num(scaler_x.scale_)
+
+        # If any infinite values exist, replace them with large finite values
+        scaler_x.mean_[np.isinf(scaler_x.mean_)] = 1e9
+        scaler_x.scale_[np.isinf(scaler_x.scale_)] = 1e9
+
+    # Apply feature weights
+    scaler_x = weigh_features(scaler_x, x_importance)
+
     scaler_y = StandardScaler()
     scaler_y.fit(y)
+
+    # Check if any NaN or infinite values exist in the scaled targets
+    if np.isnan(scaler_y.mean_).any() or np.isnan(scaler_y.scale_).any():
+        scaler_y.mean_ = np.nan_to_num(scaler_y.mean_)
+        scaler_y.scale_ = np.nan_to_num(scaler_y.scale_)
+
+        # If any infinite values exist, replace them with large finite values
+        scaler_y.mean_[np.isinf(scaler_y.mean_)] = 1e9
+        scaler_y.scale_[np.isinf(scaler_y.scale_)] = 1e9
+
     return x, y, scaler_x, scaler_y, df
 
-
-# prepare the dataset
-def prepare_data(path: str, x_filter: list, y_filter: list):
-    # load the dataset
-    dataset = CSVDataset(path, x_filter, y_filter)
-    # calculate split
+def prepare_data(path: str, x_filter: list, x_importance: list, y_filter: list):
+    dataset = CSVDataset(path, x_filter, x_importance, y_filter)
     train, test = dataset.get_splits()
-    # prepare data loaders
-    train_dl = DataLoader(train, batch_size=8192, shuffle=True)
+    train_dl = DataLoader(train, batch_size=16384, shuffle=True)
     test_dl = DataLoader(test, batch_size=4096, shuffle=False)
     return train_dl, test_dl, len(test[0][0])
 
 
-# train the model
+def weigh_features(scaler, importance):
+    # Function to weigh features based on importance
+    # Parameters:
+    #   scaler: Scaler object (e.g., StandardScaler)
+    #   importance (list): Importance weights for each feature
+    # Returns:
+    #   scaler_weighted: Weighed scaler object
 
-def train_model(train_dl: DataLoader, test_dl: DataLoader, model: Module,
+    scaler_weighted = scaler
+    scaler_weighted.mean_ *= importance
+    scaler_weighted.scale_ *= importance
+
+    return scaler_weighted
+
+
+def train_model(train_dl: DataLoader, test_dl: DataLoader, model: nn.Module,
                 epochs: int, learn_rate: float, output_dir: str, gamma: float):
-    # define the optimization
-    # criterion = MSELoss()
-    criterion = HuberLoss()
-    # criterion = L1Loss()
+    criterion = nn.HuberLoss()
     opt = Adam(model.parameters(), lr=learn_rate)
-    # opt = SGD(model.parameters(), lr=learn_rate, momentum=0.9)
     scheduler = ExponentialLR(opt, gamma=gamma)
-
-    # enumerate epochs
     min_delta = 0.0001
-    tolerance = 1000
-    # prev_loss = 100
+    tolerance = 10
     counter = 0
-    # epochss, losss = [], []
     train_stats = pd.DataFrame(columns=['epoch', 'learn_rate', 'loss', 'delta_loss', 'counter', 'val_loss'])
     i = 0
     mse = np.nan
-    for epoch in tqdm(range(epochs), total=epochs, desc='Training'):
 
-        train_features, train_labels = next(iter(train_dl))
-        opt.zero_grad()
-        yhat = model(train_features)
-        loss = criterion(yhat, train_labels)
-        loss.backward()
-        opt.step()
+    for epoch in range(epochs):
+        model.train()
+        for train_features, train_labels in train_dl:
+            opt.zero_grad()
+            yhat = model(train_features)
+            loss = criterion(yhat, train_labels)
+            loss.backward()
+            opt.step()
 
-        # for i, (inputs, targets) in enumerate(train_dl):
-        #    opt.zero_grad()
-        #    yhat = model(inputs)    
-        #    loss = criterion(yhat, targets)
-        #    loss.backward()
-        #    opt.step()
+        model.eval()
+        with torch.no_grad():
+            for test_features, test_labels in test_dl:
+                prediction_val = model(test_features)
+                val_loss = criterion(prediction_val, test_labels)
+                loss_delta = val_loss - loss
 
-        test_features, test_labels = next(iter(test_dl))
-        prediction_val = model(test_features)
-        val_loss = criterion(prediction_val, test_labels)
-        loss_delta = val_loss - loss
         my_lr = scheduler.get_last_lr()
         train_stats.loc[i + (epoch * len(train_dl))] = [epoch, float(my_lr[0]), float(loss.detach().numpy()),
                                                         float(loss_delta.detach().numpy()), counter,
                                                         val_loss.detach().numpy()]
 
-        if not epoch % 5:
+        if not epoch % 2:
             scheduler.step()
 
-            if not epoch % 250:
-                print('Epoch :', epoch, ' Learning rate :', float(my_lr[0]), 'Val Loss :', float(val_loss), ' Loss :',
-                      float(loss), ' Delta Loss :', float(loss_delta), ' ES counter :', counter)
+        if not epoch % 16:
+            print('Epoch:', epoch, 'Learning rate:', float(my_lr[0]), 'Val Loss:', float(val_loss), 'Loss:',
+                  float(loss), 'Delta Loss:', float(loss_delta), 'ES counter:', counter)
 
-                if not epoch % 1000 and epoch > 1:
-                    mse = evaluate_model(test_dl, model)
-                    print('MSE: %.3f, RMSE: %.3f' % (mse, np.sqrt(mse)))
-                    plots(train_stats, output_dir, mse)
-
-        # early stopping
-        if epoch <= 1000:
-            continue
-        if loss_delta > min_delta:
-            counter += 1
-        elif counter > 10:
-            counter -= 1
-            if counter >= tolerance:
-                print('Epoch :', epoch, ' Learning rate :', float(my_lr[0]), 'Val Loss :', float(val_loss),
-                      ' Loss :', float(loss), ' Delta Loss :', float(loss_delta), ' ES counter :', counter)
-                print("STOPPING at epoch:", epoch)
+            if not epoch % 1024 and epoch > 1:
+                mse = evaluate_model(test_dl, model)
+                print('MSE: %.3f, RMSE: %.3f' % (mse, np.sqrt(mse)))
                 plots(train_stats, output_dir, mse)
-                break
-        # prev_loss = loss
+
+        if epoch > 1024:
+            if loss_delta > min_delta:
+                counter += 1
+            if counter > 10:
+                if counter >= tolerance:
+                    print('Epoch:', epoch, 'Learning rate:', float(my_lr[0]), 'Val Loss:', float(val_loss),
+                          'Loss:', float(loss), 'Delta Loss:', float(loss_delta), 'ES counter:', counter)
+                    print("STOPPING at epoch:", epoch)
+                    plots(train_stats, output_dir, mse)
+                    return
+
     return
+
 
 
 def plots(train_stats: pd.DataFrame, output_dir: str, mse: float):
@@ -390,7 +329,7 @@ def plots(train_stats: pd.DataFrame, output_dir: str, mse: float):
 
 
 # evaluate the model
-def evaluate_model(test_dl: DataLoader, model: Module):
+def evaluate_model(test_dl: DataLoader, model: nn.Module):
     predictions, actuals = [], []
     for i, (inputs, targets) in enumerate(test_dl):
         # evaluate the model on the test set
@@ -410,7 +349,7 @@ def evaluate_model(test_dl: DataLoader, model: Module):
 
 
 # make a class prediction for one row of data
-def predict(row: list, model: Module):
+def predict(row: list, model: nn.Module):
     # convert row to data
     row = Tensor([row])
     # make prediction
@@ -420,9 +359,9 @@ def predict(row: list, model: Module):
     return yhat
 
 
-def predict_dist(model: Module, data_fp: str, data_verif_fp: str, output_dir: str, x_filter: list, y_filter: list):
+def predict_dist(model: nn.Module, data_fp: str, data_verif_fp: str, output_dir: str, x_filter: list, x_importance: list, y_filter: list):
     # verification set
-    x, y, scaler_x, scaler_y, df_verif = grab_data(data_verif_fp, x_filter, y_filter, filter_flag=False)
+    x, y, scaler_x, scaler_y, df_verif = grab_data(data_verif_fp, x_filter, x_importance, y_filter, filter_flag=False)
     scaled_x = scaler_x.transform(x)
     scaled_y = scaler_y.transform(y)
 
@@ -435,12 +374,12 @@ def predict_dist(model: Module, data_fp: str, data_verif_fp: str, output_dir: st
             print('% : ', 100 * (round(i / len(scaled_x), 3)), '  \nTrue : ', scaled_y[i][0],
                   '  \nPredicted : ', yhat[0], '\n------------')
 
-    pred_scaled_y = pd.DataFrame(preds, columns=['NN_rgeo'])
+    pred_scaled_y = pd.DataFrame(preds, columns=['NN_parallax_corr'])
     inversed_y = scaler_y.inverse_transform(np.array(pred_scaled_y))
-    df_verif['rgeo_NN'] = 10 ** inversed_y
+    df_verif['parallax_NN'] = inversed_y
 
     # training set
-    x, y, scaler_x, scaler_y, df_train = grab_data(data_fp, x_filter, y_filter, filter_flag=False)
+    x, y, scaler_x, scaler_y, df_train = grab_data(data_fp, x_filter, x_importance, y_filter, filter_flag=False)
     scaled_x = scaler_x.transform(x)
     scaled_y = scaler_y.transform(y)
 
@@ -453,15 +392,15 @@ def predict_dist(model: Module, data_fp: str, data_verif_fp: str, output_dir: st
             print('% : ', 100 * (round(i / len(scaled_x), 3)), '  \nTrue : ', scaled_y[i][0],
                   '  \nPredicted : ', yhat[0], '\n------------')
 
-    pred_scaled_y = pd.DataFrame(preds, columns=['NN_rgeo'])
+    pred_scaled_y = pd.DataFrame(preds, columns=['NN_parallax_corr'])
     inversed_y = scaler_y.inverse_transform(np.array(pred_scaled_y))
-    df_train['rgeo_NN'] = 10 ** inversed_y
+    df_train['parallax_NN'] = inversed_y
 
     print('Creating plots')
     plt.clf()
     fig, ax = plt.subplots()
-    ax.plot(df_train['rgeo'], df_train['rgeo_NN'], 'bx', alpha=0.1, ms=2)
-    ax.plot(df_verif['rgeo'], df_verif['rgeo_NN'], 'gx', alpha=0.1, ms=2)
+    ax.plot(df_train['parallax_corr'], df_train['parallax_NN'], 'bx', alpha=0.1, ms=2)
+    ax.plot(df_verif['parallax_corr'], df_verif['parallax_NN'], 'gx', alpha=0.1, ms=2)
     ax.axline((0, 0), (1, 1), color='k')
     ax.set(xlabel='True [Parsec]', ylabel='Predicted [Parsec]')
     fig.tight_layout()
@@ -469,8 +408,8 @@ def predict_dist(model: Module, data_fp: str, data_verif_fp: str, output_dir: st
 
     plt.clf()
     fig, ax = plt.subplots()
-    ax.loglog(df_train['rgeo'], df_train['rgeo_NN'], 'bx', alpha=0.1, ms=2)
-    ax.loglog(df_verif['rgeo'], df_verif['rgeo_NN'], 'gx', alpha=0.1, ms=2)
+    ax.loglog(df_train['parallax_corr'], df_train['parallax_NN'], 'bx', alpha=0.1, ms=2)
+    ax.loglog(df_verif['parallax_corr'], df_verif['parallax_NN'], 'gx', alpha=0.1, ms=2)
     ax.axline((0, 0), (1, 1), color='k')
     ax.set(xlabel='True [Parsec]', ylabel='Predicted [Parsec]')
     fig.tight_layout()
@@ -488,8 +427,8 @@ def predict_dist(model: Module, data_fp: str, data_verif_fp: str, output_dir: st
 
 def plot_corrs(df: pd.DataFrame, output_dir: str, properties: list, name: str):
     idx = np.unique(choices(np.arange(len(df)), k=1000))
-    x = df['rgeo'].values[idx]
-    y = df['rgeo_NN'].values[idx]
+    x = df['parallax_corr'].values[idx]
+    y = df['parallax_NN'].values[idx]
 
     f, axs = plt.subplots(4, len(properties) // 4, figsize=(3.75 * len(properties) // 4, 4 * 4))
     for ax, emergent_property in zip(axs.ravel(), properties):
@@ -521,51 +460,63 @@ def main(input_prefix: str = '', output_prefix: str = ''):
     """
     Main Driver function
     """
-    epochs = 20000
-    learn_rate = 0.01
-    learn_rate_gamma = 0.999
-    data_fp = input_prefix + 'GAIA_STANDARDS.csv'
-    data_verif_fp = input_prefix + 'GAIA_VARS.csv'
+    epochs = 4096
+    learn_rate = 0.1
+    learn_rate_gamma = 0.991
 
-    # x_filter = ['ra', 'dec', 'l', 'b', 'parallax', 'parallax_error', 'pmra', 'pmra_error', 'pmdec', 'pmdec_error',
-    #             'chisq', 'uwe', 'Cody_M', 'med_BRP', 'MAD', 'stet_k', 'eta', 'mean_var', 'percent_amp', 'AD',
-    #             'skew', 'kurt', 'ra_epoch2000', 'dec_epoch2000', 'parallax_x', 'parallax_over_error',
-    #             'PM_x', 'pmRA_xa', 'pmra_error_x', 'pmdec_x', 'pmdec_error_x', 'b_rgeo_x', 'B_rgeo_xa',
-    #             'rpgeo', 'b_rpgeo_x', 'B_rpgeo_xa']
-    # x_filter = ['l', 'b', 'parallax', 'parallax_error', 'percent_amp', 'skew', 'PM_x', 'parallax_x',
-    #             'parallax_over_error', 'b_rgeo_x', 'B_rgeo_xa', 'rpgeo', 'b_rpgeo_x', 'B_rpgeo_xa']
-    # x_filter = ['parallax', 'parallax_error', 'parallax_x', 'parallax_over_error', 'b_rgeo_x', 'B_rgeo_xa', 'rpgeo',
-    #             'b_rpgeo_x', 'B_rpgeo_xa']
-    # x_filter = ['l', 'b', 'parallax', 'parallax_x', 'b_rgeo_x', 'B_rgeo_xa', 'rpgeo', 'b_rpgeo_x', 'B_rpgeo_xa']
-    x_filter = ['l', 'b', 'parallax', 'pmra', 'pmdec', 'b_rgeo_x', 'B_rgeo_xa', 'rpgeo', 'b_rpgeo_x', 'B_rpgeo_xa',
-                'PM_x', 'pmRA_xa', 'pmDE', 'Plx']  # ,'j-h','h-k']
-    y_filter = ['rgeo']
-    output_dir = output_prefix + str(epochs) + '_' + str(int(1 / learn_rate)) + '_' + str(
-        int(10000 * learn_rate_gamma)) + '/'  # +'_'+dt_string+'/'
 
-    torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    for learn_rate_gamma in [0.99,0.991,0.80,0.85,0.5]:
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(device)
+        data_fp = input_prefix + 'VVV_GAIA_STANDARDS.csv'
+        data_verif_fp = data_fp#input_prefix + 'GAIA_VARS.csv'
 
-    train_dl, test_dl, vector_len = prepare_data(data_fp, x_filter, y_filter)
-    print('Data prepared')
+        x_filter = ['parallax_corr','phot_bp_rp_excess_factor_corr',
+	        'ra','dec','l','b','ecl_lon','ecl_lat',
+	        'parallax','pmra','pmdec',
+	        'dec_parallax_corr','dec_pmdec_corr','dec_pmra_corr',
+	        'parallax_pmdec_corr','parallax_pmra_corr',
+	        'pm','pmra_pmdec_corr','ra_dec_corr','radial_velocity',
+	        'ra_parallax_corr','ra_pmdec_corr','ra_pmra_corr',
+	        'ra_vvv','dec_vvv','l_vvv','b_vvv','parallax_vvv',
+	        'pmra_vvv','pmdec_vvv',
+	        'bp_g','bp_rp',
+	        'g_rp','grvs_mag',
+	        'J-K','H-K','Z-K','Y-K']
+            #Z-K and Y-K might have bad data, check weights.
 
-    model = MLP(vector_len)
-    print('Model compiled')
+        x_importance = [0.6,0.2, 0.4,0.4,0.4,0.4,0.4,0.4,
+		        0.6,0.6,0.6,0.5,0.3,0.3,
+		        0.3,0.3,0.8,0.3,0.3,
+		        0.7,0.3,0.3,0.3,0.7,
+		        0.5,0.5,0.5,1,1,1,0.5,0.5,
+		        0.5,0.4,0.7,0.7,0.4,0.4]
 
-    if not os.path.exists(output_dir + 'model.pt'):
-        if not os.path.exists(output_dir):
-            os.mkdir(output_dir)
-        train_model(train_dl, test_dl, model, epochs, learn_rate, output_dir, learn_rate_gamma)
-        torch.save(model.state_dict(), output_dir + 'model.pt')
-        print('Model trained')
-    else:
-        print('Loading model from here : ', output_dir + 'model.pt')
-        model.load_state_dict(torch.load(output_dir + 'model.pt'))
+        y_filter = ['parallax_corr']
+        output_dir = output_prefix + str(epochs) + '_' + str(int(1 / learn_rate)) + '_' + str(int(10000 * learn_rate_gamma)) + '/'
 
-    print('Predicting distances')
-    predict_dist(model, data_fp, data_verif_fp, output_dir, x_filter, y_filter)
+        torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print(device)
+
+        train_dl, test_dl, vector_len = prepare_data(data_fp, x_filter, x_importance, y_filter)
+        print('Data prepared')
+
+        model = MLP(vector_len)
+        print('Model compiled')
+
+        if True:#not os.path.exists(output_dir + 'model.pt'):
+            if not os.path.exists(output_dir):
+                os.mkdir(output_dir)
+            train_model(train_dl, test_dl, model, epochs, learn_rate, output_dir, learn_rate_gamma)
+            torch.save(model.state_dict(), output_dir + 'model.pt')
+            print('Model trained')
+        else:
+            print('Loading model from here : ', output_dir + 'model.pt')
+            model.load_state_dict(torch.load(output_dir + 'model.pt'))
+
+        print('Predicting distances')
+        predict_dist(model, data_fp, data_verif_fp, output_dir, x_filter, x_importance,  y_filter)
     return
 
 
@@ -592,4 +543,4 @@ if __name__ == '__main__':
                      'xtick.top': True, 'ytick.right': True,  # ticks on right and top of plot
                      'xtick.minor.visible': True, 'ytick.minor.visible': True,  # show minor ticks
                      'text.usetex': True})  # process text with LaTeX instead of matplotlib math mode
-    main('/beegfs/car/njm/OUTPUT/vars/','.')
+    main('/beegfs/car/njm/OUTPUT/','/beegfs/car/njm/GAIA_NN_DIST_DATA/')
