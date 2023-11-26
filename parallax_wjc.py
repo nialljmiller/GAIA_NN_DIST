@@ -103,8 +103,8 @@ class MLP(nn.Module):
 
 
 class CSVDataset(Dataset):
-    def __init__(self, path: str, x_filter: list, x_importance: list, y_filter: list):
-        x, y, scaler_x, scaler_y, df = grab_data(path, x_filter, x_importance, y_filter)
+    def __init__(self, path: str, x_filter: list, x_importance: list, y_filter: list, filters = []):
+        x, y, scaler_x, scaler_y, df = grab_data(path, x_filter, x_importance, y_filter, filters)
         self.x = torch.from_numpy(scaler_x.transform(x)).float()
         self.y = torch.from_numpy(scaler_y.transform(y)).float()
         print('TRAINING ON DATASET OF SIZE:', len(x))
@@ -121,19 +121,16 @@ class CSVDataset(Dataset):
         return random_split(self, [train_size, test_size])
 
 
-def grab_data(data_fp: str, x_filter: list, x_importance: list, y_filter: list, filter_flag: bool = True):
+def grab_data(data_fp: str, x_filter: list, x_importance: list, y_filter: list, filters = []):
     snr = 2
     df = pd.read_csv(data_fp, low_memory=False)
 
     df = df.replace(np.nan, 0)
     df = df.replace(np.inf, 0)
 
-    if filter_flag:
-        df = df.loc[
-            (abs(df['parallax_corr_over_error']) > 0.2) &
-            (abs(df['parallax_over_error_vvv']) > 0.2) &
-            (abs(df['ipd_frac_multi_peak']) < 0.1)
-            ]
+    if filters:
+        for col, condition in filters:
+            df = df.loc[condition(df[col])]
     else:
         df = df
 
@@ -171,8 +168,8 @@ def grab_data(data_fp: str, x_filter: list, x_importance: list, y_filter: list, 
     return x, y, scaler_x, scaler_y, df
 
 
-def prepare_data(path: str, x_filter: list, x_importance: list, y_filter: list):
-    dataset = CSVDataset(path, x_filter, x_importance, y_filter)
+def prepare_data(path: str, x_filter: list, x_importance: list, y_filter: list, filters = []):
+    dataset = CSVDataset(path, x_filter, x_importance, y_filter, filters)
     train, test = dataset.get_splits()
     train_dl = DataLoader(train, batch_size=16384, shuffle=True)
     test_dl = DataLoader(test, batch_size=4096, shuffle=False)
@@ -255,6 +252,75 @@ def train_model(train_dl: DataLoader, test_dl: DataLoader, model: nn.Module, epo
                 return
 
     return
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def plots(train_stats: pd.DataFrame, output_dir: str, mse: float):
@@ -601,96 +667,16 @@ def plot_corrs(df: pd.DataFrame, output_dir: str, properties: list, name: str):
     return
 
 
-def main(input_prefix: str = '', output_prefix: str = ''):
-    """
-    Main Driver function
-    """
-    epochs = 2048
-    learn_rate = 0.1
-    learn_rate_gamma = 0.9
-
-    data_fp = input_prefix + 'VVV_GAIA_STANDARDS.csv'
-    data_verif_fp = data_fp  # input_prefix + 'GAIA_VARS.csv'
-
-    x_filter = ['parallax_corr', 'phot_bp_rp_excess_factor_corr',
-                'ra', 'dec', 'l', 'b', 'ecl_lon', 'ecl_lat',
-                'parallax', 'pmra', 'pmdec',
-                'dec_parallax_corr', 'dec_pmdec_corr', 'dec_pmra_corr',
-                'parallax_pmdec_corr', 'parallax_pmra_corr',
-                'pm', 'pmra_pmdec_corr', 'ra_dec_corr', 'radial_velocity',
-                'ra_parallax_corr', 'ra_pmdec_corr', 'ra_pmra_corr',
-                'ra_vvv', 'dec_vvv', 'l_vvv', 'b_vvv', 'parallax_vvv',
-                'pmra_vvv', 'pmdec_vvv',
-                'bp_g', 'bp_rp',
-                'g_rp', 'grvs_mag',
-                'J-K', 'H-K', 'Z-K', 'Y-K']
-    # Z-K and Y-K might have bad data, check weights.
-
-    x_importance = [1e-5, 0.4,
-                    0.5, 0.5, 0.6, 0.6, 0.3, 0.3,
-                    1e-5, 1e-5, 1e-5,
-                    1e-5, 1e-5, 1e-5,
-                    1e-5, 1e-5,
-                    1e-5, 1e-5, 1e-5, 1e-5,
-                    1e-5, 1e-5, 1e-5,
-                    0.5, 0.5, 0.6, 0.6, 1e-5,
-                    1e-5, 1e-5,
-                    0.1, 0.3,
-                    0.1, 0.2,
-                    0.7, 0.6, 0.9, 0.8]
-    assert len(x_importance) == len(x_filter)
-
-    y_filter = ['parallax_corr']
-    output_dir = output_prefix + str(epochs) + '_' + str(int(1 / learn_rate)) + '_' + str(
-        int(10000 * learn_rate_gamma)) + '/'
-
-    torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(device)
-
-    train_dl, test_dl, vector_len = prepare_data(data_fp, x_filter, x_importance, y_filter)
-    print('Data prepared')
-
-    model = MLP(vector_len)
-    print('Model compiled')
-
-    if True:  # not os.path.exists(output_dir + 'model.pt'):
-        if not os.path.exists(output_dir):
-            os.mkdir(output_dir)
-        train_model(train_dl, test_dl, model, epochs, learn_rate, output_dir, learn_rate_gamma)
-        torch.save(model.state_dict(), output_dir + 'model.pt')
-        print('Model trained')
-    else:
-        print('Loading model from here : ', output_dir + 'model.pt')
-        model.load_state_dict(torch.load(output_dir + 'model.pt'))
-
-    print('Predicting distances')
-    predict_dist(model, data_fp, data_verif_fp, output_dir, x_filter, x_importance, y_filter)
-    return
 
 
-# YOU CAN USE CEPHIED AND AGB PERIOD LUMINMOSITY RELATIONS TO VERIFY
-if __name__ == '__main__':
-    now = datetime.now()
-    dt_string = now.strftime("%d%m%Y_%H%M%S")
 
-    dpi = 200  # 200-300 as per guidelines
-    maxpix = 670  # max pixels of plot
-    width = maxpix / dpi  # max allowed with
-    rcParams.update({'axes.labelsize': 'large', 'axes.titlesize': 'large',  # the size of labels and title
-                     'xtick.labelsize': 'large', 'ytick.labelsize': 'large',  # the size of the axes ticks
-                     'legend.fontsize': 'medium', 'legend.frameon': False,  # legend font size, no frame
-                     'legend.facecolor': 'none', 'legend.handletextpad': 0.1,
-                     # legend no background colour, separation from label to point
-                     'font.serif': ['Computer Modern', 'Helvetica', 'Arial',  # default fonts to try and use
-                                    'Tahoma', 'Lucida Grande', 'DejaVu Sans'],
-                     'font.family': 'serif',  # use serif fonts
-                     'mathtext.fontset': 'cm', 'mathtext.default': 'regular',  # if in math mode, use these
-                     'figure.figsize': [width, 0.7 * width], 'figure.dpi': dpi,
-                     # the figure size in inches and dots per inch
-                     'lines.linewidth': .75,  # width of plotted lines
-                     'xtick.top': True, 'ytick.right': True,  # ticks on right and top of plot
-                     'xtick.minor.visible': True, 'ytick.minor.visible': True,  # show minor ticks
-                     'text.usetex': True})  # process text with LaTeX instead of matplotlib math mode
-    main('OUTPUT/', 'GAIA_NN_DIST_DATA/')
+
+
+
+
+
+
+
+
+
+
