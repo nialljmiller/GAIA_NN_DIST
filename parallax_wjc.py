@@ -207,8 +207,7 @@ def train_model(train_dl: DataLoader, test_dl: DataLoader, model: nn.Module, epo
     optimizer = optim.Adam(model.parameters(), lr=learn_rate)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=gamma, patience=tolerance,
                                                      verbose=True)
-    train_stats = pd.DataFrame(
-        columns=['epoch', 'learn_rate', 'loss', 'delta_loss', 'counter', 'val_loss', 'r2_score', 'mse', 'mae'])
+    train_stats = pd.DataFrame(columns=['epoch', 'learn_rate', 'loss', 'delta_loss', 'counter', 'val_loss', 'r2_score', 'mse', 'mae'])
     mse = np.nan
 
     for epoch in range(epochs):
@@ -250,8 +249,8 @@ def train_model(train_dl: DataLoader, test_dl: DataLoader, model: nn.Module, epo
                 print("STOPPING at epoch:", epoch)
                 plots(train_stats, output_dir, mse)
                 return
-
-    return
+    train_results = train_stats.iloc[-1].tolist()
+    return train_results
 
 
 
@@ -485,7 +484,7 @@ def predict(row: list, model: nn.Module):
 def predict_dist(model: nn.Module, data_fp: str, data_verif_fp: str, output_dir: str, x_filter: list,
                  x_importance: list, y_filter: list):
     # verification set
-    x, y, scaler_x, scaler_y, df_verif = grab_data(data_verif_fp, x_filter, x_importance, y_filter, filter_flag=False)
+    x, y, scaler_x, scaler_y, df_verif = grab_data(data_verif_fp, x_filter, x_importance, y_filter)
     scaled_x = scaler_x.transform(x)
     scaled_y = scaler_y.transform(y)
 
@@ -503,7 +502,7 @@ def predict_dist(model: nn.Module, data_fp: str, data_verif_fp: str, output_dir:
     df_verif['parallax_NN'] = inversed_y
 
     # training set
-    x, y, scaler_x, scaler_y, df_train = grab_data(data_fp, x_filter, x_importance, y_filter, filter_flag=False)
+    x, y, scaler_x, scaler_y, df_train = grab_data(data_fp, x_filter, x_importance, y_filter)
     scaled_x = scaler_x.transform(x)
     scaled_y = scaler_y.transform(y)
 

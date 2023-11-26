@@ -14,77 +14,129 @@ def main(input_prefix: str = '', output_prefix: str = ''):
     """
     Main Driver function
     """
+
     epochs = 2048
-    learn_rate = 0.1
-    learn_rate_gamma = 0.9
 
-    data_fp = input_prefix + 'VVV_GAIA_STANDARDS.csv'
-    data_verif_fp = data_fp  # input_prefix + 'GAIA_VARS.csv'
-
-    x_filter = ['parallax_corr', 'phot_bp_rp_excess_factor_corr',
-                'ra', 'dec', 'l', 'b', 'ecl_lon', 'ecl_lat',
-                'parallax', 'pmra', 'pmdec',
-                'dec_parallax_corr', 'dec_pmdec_corr', 'dec_pmra_corr',
-                'parallax_pmdec_corr', 'parallax_pmra_corr',
-                'pm', 'pmra_pmdec_corr', 'ra_dec_corr', 'radial_velocity',
-                'ra_parallax_corr', 'ra_pmdec_corr', 'ra_pmra_corr',
-                'ra_vvv', 'dec_vvv', 'l_vvv', 'b_vvv', 'parallax_vvv',
-                'pmra_vvv', 'pmdec_vvv',
-                'bp_g', 'bp_rp',
-                'g_rp', 'grvs_mag',
-                'J-K', 'H-K', 'Z-K', 'Y-K']
-    # Z-K and Y-K might have bad data, check weights.
-
-    x_importance = [1e-5, 0.4,
-                    0.5, 0.5, 0.6, 0.6, 0.3, 0.3,
-                    1e-5, 1e-5, 1e-5,
-                    1e-5, 1e-5, 1e-5,
-                    1e-5, 1e-5,
-                    1e-5, 1e-5, 1e-5, 1e-5,
-                    1e-5, 1e-5, 1e-5,
-                    0.5, 0.5, 0.6, 0.6, 1e-5,
-                    1e-5, 1e-5,
-                    0.1, 0.3,
-                    0.1, 0.2,
-                    0.7, 0.6, 0.9, 0.8]
-
-    goodata_filters = [
-        ('parallax_corr_over_error', lambda x: abs(x) > 0.2),
-        ('ipd_frac_multi_peak', lambda x: abs(x) < 0.1),
-        ('parallax_over_error_vvv', lambda x: abs(x) > 0.6)
-    ]
+    learn_rates = np.linspace(0,1,10)
+    learn_rates_gamma = np.linspace(0,1,10)
+    gaia_astrometric_weights = np.linspace(0,1,10)
+    gaia_corr_weights = np.linspace(0,1,10)
+    gaia_photometric_weights = np.linspace(0,1,10)
+    vvv_astrometric_weights = np.linspace(0,1,10) 
+    vvv_corr_weights = np.linspace(0,1,10)
+    vvv_photometric_weights = np.linspace(0,1,10) 
+    parallax_corr_over_errors_cut = np.linspace(0.4,5,10) 
+    ipd_frac_multi_peaks_cut = np.linspace(0,0.4,10) 
+    parallax_over_error_vvvs_cut = np.linspace(0.4,5,10) 
 
 
+    header = ['learn_rate','learn_rates_gamma','gaia_astrometric_weight',
+    'gaia_corr_weight','gaia_photometric_weight','vvv_astrometric_weights',
+    'vvv_corr_weight','vvv_photometric_weights','parallax_corr_over_error_cut',
+    'ipd_frac_multi_peak_cut','parallax_over_error_vvv_cut','epoch', 'learn_rate',
+    'loss', 'delta_loss', 'counter', 'val_loss', 'r2_score', 'mse', 'mae']
 
-    assert len(x_importance) == len(x_filter)
+    with open(output_prefix + 'output_card.csv', 'w', newline='') as file:
+        csv_writer = csv.writer(file)
+        csv_writer.writerow(header)
 
-    y_filter = ['parallax_corr']
-    output_dir = output_prefix + str(epochs) + '_' + str(int(1 / learn_rate)) + '_' + str(int(10000 * learn_rate_gamma)) + '/'
 
-    torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    for learn_rate in learn_rates:
+        for learn_rate_gamma in learn_rates_gamma:
+            for gaia_astrometric_weight in gaia_astrometric_weights:
+                for gaia_corr_weight in gaia_corr_weights:
+                    for gaia_photometric_weight in gaia_photometric_weights:
+                        for vvv_astrometric_weight in vvv_astrometric_weights:
+                            for vvv_corr_weight in vvv_corr_weights:
+                                for vvv_photometric_weight in vvv_photometric_weights:
+                                    for parallax_corr_over_error_cut in parallax_corr_over_errors_cut:
+                                        for ipd_frac_multi_peak_cut in ipd_frac_multi_peaks_cut:
+                                            for parallax_over_error_vvv_cut in parallax_over_error_vvvs_cut:
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(device)
 
-    train_dl, test_dl, vector_len = nnplx.prepare_data(data_fp, x_filter, x_importance, y_filter, goodata_filters)
-    print('Data prepared')
+                                                config_list = [learn_rate,learn_rates_gamma,gaia_astrometric_weight,
+                                                gaia_corr_weight,gaia_photometric_weight,vvv_astrometric_weights,
+                                                vvv_corr_weight,vvv_photometric_weights,parallax_corr_over_error_cut,
+                                                ipd_frac_multi_peak_cut,parallax_over_error_vvv_cut]
 
-    model = nnplx.MLP(vector_len)
-    print('Model compiled')
+                                                config_string = ''.join([str(round(num * 100)) for num in config_list])
 
-    if True:  # not os.path.exists(output_dir + 'model.pt'):
-        if not os.path.exists(output_dir):
-            os.mkdir(output_dir)
-        nnplx.train_model(train_dl, test_dl, model, epochs, learn_rate, output_dir, learn_rate_gamma)
-        torch.save(model.state_dict(), output_dir + 'model.pt')
-        print('Model trained')
-    else:
-        print('Loading model from here : ', output_dir + 'model.pt')
-        model.load_state_dict(torch.load(output_dir + 'model.pt'))
 
-    print('Predicting distances')
-    nnplx.predict_dist(model, data_fp, data_verif_fp, output_dir, x_filter, x_importance, y_filter)
-    return
+                                                x_filter = ['parallax_corr', 'phot_bp_rp_excess_factor_corr',
+                                                            'ra', 'dec', 'l', 'b', 'ecl_lon', 'ecl_lat',
+                                                            'parallax', 'pmra', 'pmdec',
+                                                            'dec_parallax_corr', 'dec_pmdec_corr', 'dec_pmra_corr',
+                                                            'parallax_pmdec_corr', 'parallax_pmra_corr',
+                                                            'pm', 'pmra_pmdec_corr', 'ra_dec_corr', 'radial_velocity',
+                                                            'ra_parallax_corr', 'ra_pmdec_corr', 'ra_pmra_corr',
+                                                            'ra_vvv', 'dec_vvv', 'l_vvv', 'b_vvv', 'parallax_vvv',
+                                                            'pmra_vvv', 'pmdec_vvv',
+                                                            'bp_g', 'bp_rp',
+                                                            'g_rp', 'grvs_mag',
+                                                            'J-K', 'H-K', 'Z-K', 'Y-K']
+
+                                                x_importance = [gaia_astrometric_weight, phot_bp_rp_excess_factor_corr,
+                                                            gaia_astrometric_weight, gaia_astrometric_weight, gaia_astrometric_weight, gaia_astrometric_weight, gaia_astrometric_weight, gaia_astrometric_weight,
+                                                            gaia_astrometric_weight,gaia_astrometric_weight,gaia_astrometric_weight
+                                                            gaia_corr_weight, gaia_corr_weight, gaia_corr_weight,
+                                                            gaia_corr_weight, gaia_corr_weight,
+                                                            gaia_astrometric_weight, gaia_corr_weight, gaia_corr_weight, gaia_astrometric_weight,
+                                                            gaia_corr_weight, gaia_corr_weight, gaia_corr_weight,
+                                                            vvv_astrometric_weight, vvv_astrometric_weight, vvv_astrometric_weight, vvv_astrometric_weight, vvv_astrometric_weight,
+                                                            vvv_astrometric_weight, vvv_astrometric_weight,
+                                                            gaia_photometric_weight, gaia_photometric_weight,
+                                                            gaia_photometric_weight, gaia_photometric_weight,
+                                                            vvv_photometric_weight,vvv_photometric_weight,vvv_photometric_weight,vvv_photometric_weight]
+
+                                                goodata_filters = [
+                                                    ('parallax_corr_over_error', lambda x: abs(x) > parallax_corr_over_error_cut),
+                                                    ('ipd_frac_multi_peak', lambda x: abs(x) < ipd_frac_multi_peak_cut),
+                                                    ('parallax_over_error_vvv', lambda x: abs(x) > parallax_over_error_vvv_cut)
+                                                ]
+
+                                                data_fp = input_prefix + 'VVV_GAIA_STANDARDS.csv'
+                                                data_verif_fp = data_fp  # input_prefix + 'GAIA_VARS.csv'
+
+                                                assert len(x_importance) == len(x_filter)
+
+                                                y_filter = ['parallax_corr']
+
+                                                output_dir = output_prefix + str(epochs) + '_' + str(int(1 / learn_rate)) + '_' + str(int(10000 * learn_rate_gamma)) + '/'
+
+                                                torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+                                                device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+                                                print(device)
+
+                                                train_dl, test_dl, vector_len = nnplx.prepare_data(data_fp, x_filter, x_importance, y_filter, goodata_filters)
+                                                print('Data prepared')
+
+                                                model = nnplx.MLP(vector_len)
+                                                print('Model compiled')
+
+                                                if True:  # not os.path.exists(output_dir + 'model.pt'):
+                                                    if not os.path.exists(output_dir):
+                                                        os.mkdir(output_dir)
+                                                    train_results = nnplx.train_model(train_dl, test_dl, model, epochs, learn_rate, output_dir, learn_rate_gamma)
+                                                    torch.save(model.state_dict(), output_dir + 'model.pt')
+
+                                                    # Append new_data to existing_data
+                                                    results_line = config_list + train_results
+
+
+                                                    # Write the combined data (existing_data + new_data) to the CSV file
+                                                    with open(output_prefix + 'output_card.csv', 'a', newline='') as file:
+                                                        csv_writer = csv.writer(file)
+                                                        csv_writer.writerows(results_line)
+
+                                                    print('Model trained')
+                                                else:
+                                                    print('Loading model from here : ', output_dir + 'model.pt')
+                                                    model.load_state_dict(torch.load(output_dir + 'model.pt'))
+
+                                                print('Predicting distances')
+                                                nnplx.predict_dist(model, data_fp, data_verif_fp, output_dir, x_filter, x_importance, y_filter)
+                                                return
 
 
 
