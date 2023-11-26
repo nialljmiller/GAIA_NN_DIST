@@ -19,26 +19,26 @@ def main(input_prefix: str = '', output_prefix: str = ''):
     gaia_astrometric_weights = np.linspace(0.01, 1, 3)
     gaia_corr_weights = np.linspace(0.01, 1, 3)
     gaia_photometric_weights = np.linspace(0.01, 1, 3)
-    vvv_astrometric_weights = np.linspace(0.01, 1, 3)
-    vvv_corr_weights = np.linspace(0.01, 1, 3)
-    vvv_photometric_weights = np.linspace(0.01, 1, 3)
+    # vvv_astrometric_weights = np.linspace(0.01, 1, 3)
+    # vvv_corr_weights = np.linspace(0.01, 1, 3)
+    # vvv_photometric_weights = np.linspace(0.01, 1, 3)
     parallax_corr_over_errors_cut = np.linspace(0.1, 8, 3)
     ipd_frac_multi_peaks_cut = np.linspace(0.1, 10, 3)
     parallax_over_error_vvvs_cut = np.linspace(0.1, 10, 3)
 
     header = ['parallax_corr', 'phot_bp_rp_excess_factor_corr',
-    'ra', 'dec', 'l', 'b', 'ecl_lon', 'ecl_lat',
-    'parallax', 'pmra', 'pmdec',
-    'dec_parallax_corr', 'dec_pmdec_corr', 'dec_pmra_corr',
-    'parallax_pmdec_corr', 'parallax_pmra_corr',
-    'pm', 'pmra_pmdec_corr', 'ra_dec_corr', 'radial_velocity',
-    'ra_parallax_corr', 'ra_pmdec_corr', 'ra_pmra_corr',
-    'ra_vvv', 'dec_vvv', 'l_vvv', 'b_vvv', 'parallax_vvv',
-    'pmra_vvv', 'pmdec_vvv',
-    'bp_g', 'bp_rp',
-    'g_rp', 'grvs_mag',
-    'J-K', 'H-K', 'Z-K', 'Y-K' 'epoch', 'learn_rate',
-    'loss', 'delta_loss', 'counter', 'val_loss', 'r2_score', 'mse', 'mae']
+              'ra', 'dec', 'l', 'b', 'ecl_lon', 'ecl_lat',
+              'parallax', 'pmra', 'pmdec',
+              'dec_parallax_corr', 'dec_pmdec_corr', 'dec_pmra_corr',
+              'parallax_pmdec_corr', 'parallax_pmra_corr',
+              'pm', 'pmra_pmdec_corr', 'ra_dec_corr', 'radial_velocity',
+              'ra_parallax_corr', 'ra_pmdec_corr', 'ra_pmra_corr',
+              'ra_vvv', 'dec_vvv', 'l_vvv', 'b_vvv', 'parallax_vvv',
+              'pmra_vvv', 'pmdec_vvv',
+              'bp_g', 'bp_rp',
+              'g_rp', 'grvs_mag',
+              'J-K', 'H-K', 'Z-K', 'Y-K' 'epoch', 'learn_rate',
+              'loss', 'delta_loss', 'counter', 'val_loss', 'r2_score', 'mse', 'mae']
 
     with open(output_prefix + 'output_card.csv', 'w', newline='') as file:
         csv_writer = csv.writer(file)
@@ -66,7 +66,7 @@ def main(input_prefix: str = '', output_prefix: str = ''):
                                                    vvv_corr_weight, vvv_photometric_weight,
                                                    parallax_corr_over_error_cut,
                                                    ipd_frac_multi_peak_cut, parallax_over_error_vvv_cut]
-                                
+
                                     config_string = ''.join([str(round(num * 100)) for num in config_list])
 
                                     x_filter = ['parallax_corr', 'phot_bp_rp_excess_factor_corr',
@@ -83,25 +83,25 @@ def main(input_prefix: str = '', output_prefix: str = ''):
                                                 'J-K', 'H-K', 'Z-K', 'Y-K']
 
                                     x_importance_raw = [gaia_astrometric_weight, gaia_corr_weight,
-                                                    gaia_astrometric_weight, gaia_astrometric_weight,
-                                                    gaia_astrometric_weight, gaia_astrometric_weight,
-                                                    gaia_astrometric_weight, gaia_astrometric_weight,
-                                                    gaia_astrometric_weight, gaia_astrometric_weight,
-                                                    gaia_astrometric_weight,
-                                                    gaia_corr_weight, gaia_corr_weight, gaia_corr_weight,
-                                                    gaia_corr_weight, gaia_corr_weight,
-                                                    gaia_astrometric_weight, gaia_corr_weight,
-                                                    gaia_corr_weight, gaia_astrometric_weight,
-                                                    gaia_corr_weight, gaia_corr_weight, gaia_corr_weight,
-                                                    vvv_astrometric_weight, vvv_astrometric_weight,
-                                                    vvv_astrometric_weight, vvv_astrometric_weight,
-                                                    vvv_astrometric_weight,
-                                                    vvv_astrometric_weight, vvv_astrometric_weight,
-                                                    gaia_photometric_weight, gaia_photometric_weight,
-                                                    gaia_photometric_weight, gaia_photometric_weight,
-                                                    vvv_photometric_weight, vvv_photometric_weight,
-                                                    vvv_photometric_weight, vvv_photometric_weight]
-                                    
+                                                        gaia_astrometric_weight, gaia_astrometric_weight,
+                                                        gaia_astrometric_weight, gaia_astrometric_weight,
+                                                        gaia_astrometric_weight, gaia_astrometric_weight,
+                                                        gaia_astrometric_weight, gaia_astrometric_weight,
+                                                        gaia_astrometric_weight,
+                                                        gaia_corr_weight, gaia_corr_weight, gaia_corr_weight,
+                                                        gaia_corr_weight, gaia_corr_weight,
+                                                        gaia_astrometric_weight, gaia_corr_weight,
+                                                        gaia_corr_weight, gaia_astrometric_weight,
+                                                        gaia_corr_weight, gaia_corr_weight, gaia_corr_weight,
+                                                        vvv_astrometric_weight, vvv_astrometric_weight,
+                                                        vvv_astrometric_weight, vvv_astrometric_weight,
+                                                        vvv_astrometric_weight,
+                                                        vvv_astrometric_weight, vvv_astrometric_weight,
+                                                        gaia_photometric_weight, gaia_photometric_weight,
+                                                        gaia_photometric_weight, gaia_photometric_weight,
+                                                        vvv_photometric_weight, vvv_photometric_weight,
+                                                        vvv_photometric_weight, vvv_photometric_weight]
+
                                     x_importance = []
                                     jitter = 0.1
                                     for ximp in x_importance_raw:
@@ -142,8 +142,9 @@ def main(input_prefix: str = '', output_prefix: str = ''):
 
                                     model = nnplx.MLP(vector_len)
                                     print('Model compiled')
+                                    retrain = True
 
-                                    if True:  # not os.path.exists(output_dir + 'model.pt'):
+                                    if retrain:  # not os.path.exists(output_dir + 'model.pt'):
                                         if not os.path.exists(output_dir):
                                             os.mkdir(output_dir)
                                         train_results = nnplx.train_model(train_dl, test_dl, model, epochs,
@@ -158,17 +159,17 @@ def main(input_prefix: str = '', output_prefix: str = ''):
                                         with open(output_prefix + 'output_card.csv', 'a',
                                                   newline='') as file:
                                             csv_writer = csv.writer(file)
-                                            csv_writer.writerows(results_line)
+                                            csv_writer.writerow(results_line)
 
                                         print('Model trained')
-                                    else: 
+                                    else:
                                         print('Loading model from here : ', output_dir + 'model.pt')
                                         model.load_state_dict(torch.load(output_dir + 'model.pt'))
 
                                     print('Predicting distances')
                                     nnplx.predict_dist(model, data_fp, data_verif_fp, output_dir, x_filter,
                                                        x_importance, y_filter)
-                                    return
+    return
 
 
 # YOU CAN USE CEPHIED AND AGB PERIOD LUMINMOSITY RELATIONS TO VERIFY

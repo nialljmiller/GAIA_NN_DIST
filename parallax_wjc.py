@@ -1,6 +1,6 @@
-import os  # Operating system related functionalities
-from datetime import datetime  # Working with dates and times
-from random import choices, random  # Random sampling and number generation
+# import os  # Operating system related functionalities
+# from datetime import datetime  # Working with dates and times
+from random import choices  # Random sampling and number generation
 
 import numpy as np  # Numerical operations
 import pandas as pd  # Data manipulation
@@ -9,16 +9,16 @@ import torch  # Main PyTorch library
 from torch import Tensor  # Tensor class from PyTorch
 # from torch.nn import Linear, Sigmoid, Module, ReLU, HuberLoss, BatchNorm1d  # Neural network layers and loss functions
 import torch.nn as nn
-from torch.nn.init import xavier_uniform_  # Xavier uniform weight initialization
+# from torch.nn.init import xavier_uniform_  # Xavier uniform weight initialization
 import torch.optim as optim
-from torch.optim.lr_scheduler import ExponentialLR  # Learning rate scheduler
+# from torch.optim.lr_scheduler import ExponentialLR  # Learning rate scheduler
 from torch.utils.data import Dataset, DataLoader, random_split  # PyTorch data loading utilities
-import torch.nn.functional as F
+# import torch.nn.functional as F
 
 from sklearn.preprocessing import StandardScaler  # Data normalization
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error  # Evaluating model performance
 import matplotlib.pyplot as plt  # Plotting
-from matplotlib import rcParams  # Customizing plot parameters
+# from matplotlib import rcParams  # Customizing plot parameters
 
 from tqdm import tqdm  # Creating progress bars
 
@@ -103,7 +103,9 @@ class MLP(nn.Module):
 
 
 class CSVDataset(Dataset):
-    def __init__(self, path: str, x_filter: list, x_importance: list, y_filter: list, filters = []):
+    def __init__(self, path: str, x_filter: list, x_importance: list, y_filter: list, filters=None):
+        if filters is None:
+            filters = []
         x, y, scaler_x, scaler_y, df = grab_data(path, x_filter, x_importance, y_filter, filters)
         self.x = torch.from_numpy(scaler_x.transform(x)).float()
         self.y = torch.from_numpy(scaler_y.transform(y)).float()
@@ -121,8 +123,9 @@ class CSVDataset(Dataset):
         return random_split(self, [train_size, test_size])
 
 
-def grab_data(data_fp: str, x_filter: list, x_importance: list, y_filter: list, filters = []):
-    snr = 2
+def grab_data(data_fp: str, x_filter: list, x_importance: list, y_filter: list, filters=None):
+    if filters is None:
+        filters = []
     df = pd.read_csv(data_fp, low_memory=False)
 
     df = df.replace(np.nan, 0)
@@ -168,7 +171,9 @@ def grab_data(data_fp: str, x_filter: list, x_importance: list, y_filter: list, 
     return x, y, scaler_x, scaler_y, df
 
 
-def prepare_data(path: str, x_filter: list, x_importance: list, y_filter: list, filters = []):
+def prepare_data(path: str, x_filter: list, x_importance: list, y_filter: list, filters=None):
+    if filters is None:
+        filters = []
     dataset = CSVDataset(path, x_filter, x_importance, y_filter, filters)
     train, test = dataset.get_splits()
     train_dl = DataLoader(train, batch_size=16384, shuffle=True)
@@ -195,19 +200,24 @@ def train_model(train_dl: DataLoader, test_dl: DataLoader, model: nn.Module, epo
                 output_dir: str, gamma: float):
     # During training/validation, calculate additional evaluation metrics
     def evaluate_metrics(y_true, y_pred):
-        r2 = r2_score(y_true, y_pred)
-        mse = mean_squared_error(y_true, y_pred)
-        mae = mean_absolute_error(y_true, y_pred)
-        return r2, mse, mae
+        _r2 = r2_score(y_true, y_pred)
+        _mse = mean_squared_error(y_true, y_pred)
+        _mae = mean_absolute_error(y_true, y_pred)
+        return _r2, _mse, _mae
 
     min_delta = 0.0001
     tolerance = 3
     counter = 0
+    loss = None
+    train_labels = None
+    yhat = None
+    my_lr = None
     criterion = nn.SmoothL1Loss()
     optimizer = optim.Adam(model.parameters(), lr=learn_rate)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=gamma, patience=tolerance,
                                                      verbose=True)
-    train_stats = pd.DataFrame(columns=['epoch', 'learn_rate', 'loss', 'delta_loss', 'counter', 'val_loss', 'r2_score', 'mse', 'mae'])
+    train_stats = pd.DataFrame(
+        columns=['epoch', 'learn_rate', 'loss', 'delta_loss', 'counter', 'val_loss', 'r2_score', 'mse', 'mae'])
     mse = np.nan
 
     for epoch in range(epochs):
@@ -253,76 +263,10 @@ def train_model(train_dl: DataLoader, test_dl: DataLoader, model: nn.Module, epo
     return train_results
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def plots(train_stats: pd.DataFrame, output_dir: str, mse: float):
+    doplots = False
+    if not doplots:
+        return
     try:
         plt.clf()
         fig, ax = plt.subplots()
@@ -609,6 +553,9 @@ def predict_dist(model: nn.Module, data_fp: str, data_verif_fp: str, output_dir:
 
 
 def plot_corrs(df: pd.DataFrame, output_dir: str, properties: list, name: str):
+    doplots = False
+    if not doplots:
+        return
     idx = np.unique(choices(np.arange(len(df)), k=1000))
     x = df['parallax_corr'].values[idx]
     y = df['parallax_NN'].values[idx]
@@ -664,18 +611,3 @@ def plot_corrs(df: pd.DataFrame, output_dir: str, properties: list, name: str):
     plt.savefig(output_dir + '/pred_true_plx_colour_log_' + str(name) + '_vars.jpg', bbox_inches='tight')
     plt.close()
     return
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
