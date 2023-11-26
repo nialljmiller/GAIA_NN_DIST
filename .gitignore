@@ -1,4 +1,6 @@
 *csv
+GAIA_NN_DIST_DATA
+OUTPUT
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
